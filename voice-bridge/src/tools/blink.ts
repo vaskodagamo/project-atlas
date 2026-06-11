@@ -8,6 +8,7 @@ import { log } from "../logger.js";
 // from index.ts. Blink is cloud-only + an unofficial API, so this is polling, not instant push.
 
 export const DOOR_IMAGE = "/tmp/jarvis-door.jpg";
+export const DOOR_CLIP = "/tmp/jarvis-door.mp4";
 
 interface DoorStatus {
   motion_detected: boolean | null;
@@ -58,6 +59,17 @@ async function snapshot(path: string): Promise<boolean> {
   }
 }
 
+/** Download the just-recorded clip (mp4). Returns the path, or null if it isn't available yet. */
+async function downloadClip(): Promise<string | null> {
+  try {
+    await runHelper(["clip", config.blink.camera, DOOR_CLIP], 60000);
+    return DOOR_CLIP;
+  } catch (err) {
+    log.warn("blink clip download failed — will send the photo instead", { err: String(err) });
+    return null;
+  }
+}
+
 /** Snap the doorbell and have a vision model describe who/what is there. Returns a spoken sentence. */
 export async function describeDoor(): Promise<string> {
   const fallback = "Someone's at the front door.";
@@ -104,7 +116,9 @@ export async function describeDoor(): Promise<string> {
  * Poll the doorbell; when a NEW clip is recorded (a ring or motion while armed), call onEvent with a
  * spoken announcement. The first poll just sets the baseline (no announcement on startup).
  */
-export function startDoorbellWatcher(onEvent: (announcement: string, imagePath: string) => Promise<void>): void {
+export function startDoorbellWatcher(
+  onEvent: (announcement: string, imagePath: string, clipPath: string | null) => Promise<void>,
+): void {
   let baseline: string | null = null;
   let busy = false;
 
@@ -123,7 +137,9 @@ export function startDoorbellWatcher(onEvent: (announcement: string, imagePath: 
       busy = true;
       log.info("doorbell event", { last_record: status.last_record, recent_clips: status.recent_clips });
       try {
-        await onEvent(await describeDoor(), DOOR_IMAGE);
+        const description = await describeDoor(); // snapshot still + vision (also leaves DOOR_IMAGE)
+        const clip = await downloadClip(); // the actual recorded footage (mp4), if ready
+        await onEvent(description, DOOR_IMAGE, clip);
       } finally {
         busy = false;
       }

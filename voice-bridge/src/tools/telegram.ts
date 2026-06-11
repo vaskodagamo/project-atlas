@@ -2,9 +2,9 @@ import { spawn } from "node:child_process";
 import { config } from "../config.js";
 import { log } from "../logger.js";
 
-// Send a photo + caption to a Telegram chat using the OpenClaw bot (`openclaw message send`). Reuses
-// the bot the user already set up, so the message lands in their existing Jarvis chat.
-export function sendTelegramPhoto(target: string, caption: string, mediaPath: string): Promise<void> {
+// Send media (photo OR video) + caption to a Telegram chat using the OpenClaw bot
+// (`openclaw message send --media`). Reuses the bot the user set up, so it lands in their Jarvis chat.
+export function sendTelegramMedia(target: string, caption: string, mediaPath: string): Promise<void> {
   return new Promise((resolve) => {
     const child = spawn(
       config.openclaw.bin,

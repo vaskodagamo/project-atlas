@@ -156,6 +156,21 @@ async def cmd_snapshot(session, cam, path):
     print(path)
 
 
+async def cmd_clip(session, cam, path):
+    blink = await connect(session)
+    if cam not in blink.cameras:
+        sys.exit(f"No camera named {cam!r}. Available: {list(blink.cameras.keys())}")
+    camera = blink.cameras[cam]
+    # The recorded clip is uploaded to Blink's cloud a few seconds after the event — wait for it.
+    for _ in range(4):
+        await blink.refresh()
+        if getattr(camera, "clip", None) or (camera.attributes.get("recent_clips") or []):
+            break
+        await asyncio.sleep(3)
+    await camera.video_to_file(path)
+    print(path)
+
+
 async def cmd_poll(session, cam):
     import urllib.parse
 
@@ -188,6 +203,8 @@ async def main():
             await cmd_cameras(session)
         elif cmd == "snapshot":
             await cmd_snapshot(session, sys.argv[2], sys.argv[3])
+        elif cmd == "clip":
+            await cmd_clip(session, sys.argv[2], sys.argv[3])
         elif cmd == "poll":
             await cmd_poll(session, sys.argv[2])
         else:

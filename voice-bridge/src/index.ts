@@ -11,7 +11,7 @@ import { dispatch } from "./tools/dispatcher.js";
 import { pingOpenclaw } from "./tools/openclaw.js";
 import { whatsapp } from "./tools/whatsapp.js";
 import { startDoorbellWatcher } from "./tools/blink.js";
-import { sendTelegramPhoto, berlinTime } from "./tools/telegram.js";
+import { sendTelegramMedia, berlinTime } from "./tools/telegram.js";
 import { speak } from "./audio/tts.js";
 import { rms } from "./audio/pcm.js";
 
@@ -198,11 +198,12 @@ if (config.whatsapp.enabled) {
 }
 
 if (config.blink.enabled) {
-  startDoorbellWatcher(async (text, imagePath) => {
-    log.info("doorbell announcement", { text });
+  startDoorbellWatcher(async (text, imagePath, clipPath) => {
+    log.info("doorbell announcement", { text, clip: Boolean(clipPath) });
     await speak(text, playback); // proactive: speak even with no active session
     if (config.blink.telegramTarget) {
-      await sendTelegramPhoto(config.blink.telegramTarget, `🔔 ${text}\n🕐 ${berlinTime()} (Berlin)`, imagePath);
+      const media = clipPath ?? imagePath; // prefer the actual recorded clip; fall back to the still
+      await sendTelegramMedia(config.blink.telegramTarget, `🔔 ${text}\n🕐 ${berlinTime()} (Berlin)`, media);
     }
   });
 }
