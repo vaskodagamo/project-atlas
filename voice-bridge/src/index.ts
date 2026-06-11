@@ -57,15 +57,34 @@ type State = "IDLE" | "SESSION";
 let state: State = "IDLE";
 let rt: RealtimeClient | null = null;
 let inactivity: NodeJS.Timeout | null = null;
+let playbackActive = false; // Jarvis is currently speaking (ffplay playing out a reply)
+let toolRunning = false; // a tool call is in flight
 // Mic sanity check: track the peak level over the first ~3s so a dead/permission-blocked mic is obvious.
 let micCheckFrames = 0;
 let micPeak = 0;
 const MIC_CHECK_FRAMES = Math.round(3000 / ((frameLength / config.audio.captureSampleRate) * 1000));
 
-function armInactivity(): void {
-  if (inactivity) clearTimeout(inactivity);
-  inactivity = setTimeout(endSession, config.session.inactivityMs);
+// Only count down to idle when nothing is happening — not while Jarvis is still talking out a reply
+// or a tool call is running. (Fixes a reply getting cut off when the session went idle mid-playback.)
+function refreshIdle(): void {
+  if (inactivity) {
+    clearTimeout(inactivity);
+    inactivity = null;
+  }
+  if (state === "SESSION" && !playbackActive && !toolRunning) {
+    inactivity = setTimeout(endSession, config.session.inactivityMs);
+  }
 }
+
+// Playback lifecycle drives the idle timer (registered once; playback is a singleton).
+playback.on("playing", () => {
+  playbackActive = true;
+  refreshIdle();
+});
+playback.on("drained", () => {
+  playbackActive = false;
+  refreshIdle();
+});
 
 async function startSession(): Promise<void> {
   if (state === "SESSION") return;
@@ -80,18 +99,23 @@ async function startSession(): Promise<void> {
   client.on("speech_started", () => {
     log.info("heard you — listening");
     playback.flush(); // stop talking the instant the user does; server_vad cancels the response
-    armInactivity();
+    playbackActive = false;
+    refreshIdle();
   });
   client.on("response_started", () => {
     log.info("Jarvis is replying");
     playback.startResponse(); // fresh ffplay for this response (fixes post-tool reply being silent)
   });
-  client.on("assistant_done", () => armInactivity());
+  client.on("assistant_done", () => playback.finishResponse()); // drain → "drained" arms the idle timer
   client.on("function_call", async (call: FunctionCall) => {
     log.info("tool call", { name: call.name, args: call.args });
+    toolRunning = true;
+    refreshIdle();
     const result = await dispatch(call.name, call.args);
     log.debug("tool result", { name: call.name, result: result.slice(0, 200) });
     client.sendFunctionResult(call.callId, result);
+    toolRunning = false;
+    refreshIdle();
   });
   client.on("error", (err: Error) => log.error("realtime error", { err: String(err) }));
   client.on("close", () => {
@@ -101,7 +125,7 @@ async function startSession(): Promise<void> {
   try {
     await client.connect();
     log.info("session ready — go ahead and talk");
-    armInactivity();
+    refreshIdle();
   } catch (err) {
     log.error("failed to open Realtime session", { err: String(err) });
     endSession();
@@ -114,6 +138,8 @@ function endSession(): void {
     clearTimeout(inactivity);
     inactivity = null;
   }
+  playbackActive = false;
+  toolRunning = false;
   playback.flush();
   rt?.close();
   rt = null;

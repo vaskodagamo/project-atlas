@@ -4,6 +4,7 @@ import { askOpenclaw } from "./openclaw.js";
 import { listEmails, readEmail, draftEmail, type MailAccount } from "./email.js";
 import { openApp, setVolume, macSystem, runAppleScript, runShell } from "./mac.js";
 import { whatsapp } from "./whatsapp.js";
+import { controlLight, lightStatus } from "./wiz.js";
 
 /** JSON-Schema-ish parameter spec passed to the Realtime API. */
 export interface ToolDefinition {
@@ -259,6 +260,44 @@ if (config.whatsapp.enabled) {
       },
       requiresConfirmation: true,
       handler: (args) => whatsapp.send(String(args.to ?? ""), String(args.text ?? "")),
+    },
+  );
+}
+
+// WiZ smart light control (local UDP). Non-destructive, no confirmation.
+if (config.wiz.enabled) {
+  tools.push(
+    {
+      name: "light_control",
+      description:
+        `Control the user's ${config.wiz.name} (a WiZ smart bulb). Set any of: power on/off, brightness, ` +
+        "a colour, warm/neutral/cool white, or a scene. Only include the fields the user asked for.",
+      parameters: {
+        type: "object",
+        properties: {
+          power: { type: "string", enum: ["on", "off"] },
+          brightness: { type: "number", description: "Brightness percent, 10-100." },
+          color: { type: "string", description: "Colour name, e.g. red, blue, warm orange, pink." },
+          white: { type: "string", enum: ["warm", "neutral", "cool"], description: "White temperature." },
+          scene: { type: "string", description: "A WiZ scene, e.g. cozy, party, ocean, relax, candlelight." },
+        },
+      },
+      requiresConfirmation: false,
+      handler: (args) =>
+        controlLight({
+          power: typeof args.power === "string" ? args.power : undefined,
+          brightness: typeof args.brightness === "number" ? args.brightness : undefined,
+          color: typeof args.color === "string" ? args.color : undefined,
+          white: typeof args.white === "string" ? args.white : undefined,
+          scene: typeof args.scene === "string" ? args.scene : undefined,
+        }),
+    },
+    {
+      name: "light_status",
+      description: `Check whether the user's ${config.wiz.name} is on/off and its brightness.`,
+      parameters: { type: "object", properties: {} },
+      requiresConfirmation: false,
+      handler: () => lightStatus(),
     },
   );
 }

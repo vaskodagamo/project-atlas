@@ -52,6 +52,10 @@ const schema = z.object({
   // WhatsApp via Baileys (unofficial multi-device client — opt-in). First run shows a QR to link.
   WHATSAPP_ENABLED: z.string().default("false").transform((v) => v === "true"),
 
+  // WiZ smart light (local UDP control on port 38899). Set the bulb's LAN IP to enable.
+  WIZ_LIGHT_IP: z.string().default(""),
+  WIZ_LIGHT_NAME: z.string().default("office light"),
+
   // EMEET audio (capture device; playback uses the system default output via ffplay)
   EMEET_DEVICE_NAME: z.string().default("EMEET"),
   CAPTURE_SAMPLE_RATE: z.coerce.number().int().positive().default(16000),
@@ -128,6 +132,7 @@ function load() {
     email: { enabled: emailAccounts.length > 0, accounts: emailAccounts },
     mac: { enabled: e.MAC_CONTROL },
     whatsapp: { enabled: e.WHATSAPP_ENABLED },
+    wiz: { enabled: Boolean(e.WIZ_LIGHT_IP), ip: e.WIZ_LIGHT_IP, name: e.WIZ_LIGHT_NAME },
     audio: {
       deviceName: e.EMEET_DEVICE_NAME,
       captureSampleRate: e.CAPTURE_SAMPLE_RATE,

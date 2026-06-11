@@ -13,7 +13,8 @@
     "typecheck": "tsc --noEmit",
     "list-devices": "tsx src/audio/list-devices.ts",
     "test:openclaw": "tsx scripts/test-openclaw.ts",
-    "test:email": "tsx scripts/test-email.ts"
+    "test:email": "tsx scripts/test-email.ts",
+    "wiz-discover": "tsx scripts/wiz-discover.ts"
   },
   "dependencies": {
     "@hapi/boom": "^10.0.1",
