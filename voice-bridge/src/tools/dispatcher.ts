@@ -3,6 +3,7 @@ import { log } from "../logger.js";
 import { askOpenclaw } from "./openclaw.js";
 import { listEmails, readEmail, draftEmail, type MailAccount } from "./email.js";
 import { openApp, setVolume, macSystem, runAppleScript, runShell } from "./mac.js";
+import { whatsapp } from "./whatsapp.js";
 
 /** JSON-Schema-ish parameter spec passed to the Realtime API. */
 export interface ToolDefinition {
@@ -224,6 +225,44 @@ if (config.mac.enabled) {
   );
 }
 
+// WhatsApp tools (unofficial Baileys client). Read instantly; send is confirmation-gated.
+if (config.whatsapp.enabled) {
+  tools.push(
+    {
+      name: "whatsapp_chats",
+      description: "List recent WhatsApp chats with unread counts and a preview of the latest message.",
+      parameters: { type: "object", properties: {} },
+      requiresConfirmation: false,
+      handler: async () => whatsapp.listChats(),
+    },
+    {
+      name: "whatsapp_read",
+      description: "Read recent WhatsApp messages from a contact or group (by name or phone number).",
+      parameters: {
+        type: "object",
+        properties: { contact: { type: "string", description: "Contact/group name or phone number." } },
+        required: ["contact"],
+      },
+      requiresConfirmation: false,
+      handler: async (args) => whatsapp.readChat(String(args.contact ?? "")),
+    },
+    {
+      name: "whatsapp_send",
+      description: "Send a WhatsApp message to a contact (by name or number). Requires the user's spoken confirmation.",
+      parameters: {
+        type: "object",
+        properties: {
+          to: { type: "string", description: "Contact/group name or phone number." },
+          text: { type: "string", description: "Message text to send." },
+        },
+        required: ["to", "text"],
+      },
+      requiresConfirmation: true,
+      handler: (args) => whatsapp.send(String(args.to ?? ""), String(args.text ?? "")),
+    },
+  );
+}
+
 const byName = new Map(tools.map((t) => [t.name, t]));
 
 export function getToolDefinitions(): ToolDefinition[] {
@@ -238,6 +277,7 @@ const CONFIRM_TTL_MS = 120_000;
 function describeAction(name: string, args: Record<string, unknown>): string {
   if (name === "run_shell") return `run the shell command: ${String(args.command ?? "")}`;
   if (name === "run_applescript") return "run an AppleScript on your Mac";
+  if (name === "whatsapp_send") return `send a WhatsApp message to ${String(args.to ?? "")}: "${String(args.text ?? "")}"`;
   return `run ${name}`;
 }
 

@@ -49,6 +49,9 @@ const schema = z.object({
   // gated behind a spoken confirmation. Set to false to disable all Mac control tools.
   MAC_CONTROL: z.string().default("true").transform((v) => v !== "false"),
 
+  // WhatsApp via Baileys (unofficial multi-device client — opt-in). First run shows a QR to link.
+  WHATSAPP_ENABLED: z.string().default("false").transform((v) => v === "true"),
+
   // EMEET audio (capture device; playback uses the system default output via ffplay)
   EMEET_DEVICE_NAME: z.string().default("EMEET"),
   CAPTURE_SAMPLE_RATE: z.coerce.number().int().positive().default(16000),
@@ -124,6 +127,7 @@ function load() {
     },
     email: { enabled: emailAccounts.length > 0, accounts: emailAccounts },
     mac: { enabled: e.MAC_CONTROL },
+    whatsapp: { enabled: e.WHATSAPP_ENABLED },
     audio: {
       deviceName: e.EMEET_DEVICE_NAME,
       captureSampleRate: e.CAPTURE_SAMPLE_RATE,

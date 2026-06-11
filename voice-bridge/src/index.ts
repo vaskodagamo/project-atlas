@@ -9,6 +9,7 @@ import { Resampler } from "./audio/resampler.js";
 import { RealtimeClient, type FunctionCall } from "./realtime/client.js";
 import { dispatch } from "./tools/dispatcher.js";
 import { pingOpenclaw } from "./tools/openclaw.js";
+import { whatsapp } from "./tools/whatsapp.js";
 import { rms } from "./audio/pcm.js";
 
 const mode = config.wake.mode; // "ptt" | "porcupine"
@@ -160,6 +161,11 @@ if (await pingOpenclaw()) {
   log.warn("OpenClaw gateway not reachable — memory/tools will fail until it's up", {
     url: config.openclaw.url,
   });
+}
+
+if (config.whatsapp.enabled) {
+  log.info("connecting WhatsApp (first run prints a QR to scan from your phone)…");
+  whatsapp.start().catch((e) => log.error("WhatsApp start failed", { err: String(e) }));
 }
 
 playback.start();

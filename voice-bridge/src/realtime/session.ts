@@ -26,7 +26,12 @@ immediately. run_shell and run_applescript are POWERFUL and gated: when you call
 replies "CONFIRMATION REQUIRED" and does NOT run it — at that point tell the user plainly what you're
 about to run and ask them to say "confirm" or "cancel". Only if they clearly agree, call
 confirm_action; if they decline or hesitate, call cancel_action. Never call confirm_action unless the
-user just said yes. Prefer the safe curated tools over run_shell when one fits.`;
+user just said yes. Prefer the safe curated tools over run_shell when one fits.
+
+If WhatsApp tools are available: whatsapp_chats lists recent chats with unread counts, whatsapp_read
+reads recent messages from a contact (match the name the user says). whatsapp_send sends a message but
+is gated by the same confirmation flow — confirm the recipient and exact text with the user, get a
+spoken "confirm", then confirm_action. Read uids/headers are never spoken; summarise naturally.`;
 
 /** Build the `session.update` payload (GA nested-format schema). */
 export function buildSessionUpdate(opts: { voice: string; tools: ToolDefinition[] }) {
