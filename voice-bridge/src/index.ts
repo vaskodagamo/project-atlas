@@ -10,6 +10,8 @@ import { RealtimeClient, type FunctionCall } from "./realtime/client.js";
 import { dispatch } from "./tools/dispatcher.js";
 import { pingOpenclaw } from "./tools/openclaw.js";
 import { whatsapp } from "./tools/whatsapp.js";
+import { startDoorbellWatcher } from "./tools/blink.js";
+import { speak } from "./audio/tts.js";
 import { rms } from "./audio/pcm.js";
 
 const mode = config.wake.mode; // "ptt" | "porcupine"
@@ -192,6 +194,13 @@ if (await pingOpenclaw()) {
 if (config.whatsapp.enabled) {
   log.info("connecting WhatsApp (first run prints a QR to scan from your phone)…");
   whatsapp.start().catch((e) => log.error("WhatsApp start failed", { err: String(e) }));
+}
+
+if (config.blink.enabled) {
+  startDoorbellWatcher(async (text) => {
+    log.info("doorbell announcement", { text });
+    await speak(text, playback); // proactive: speak even with no active session
+  });
 }
 
 playback.start();

@@ -9,6 +9,11 @@ interface Utterance {
   complete: boolean;
 }
 
+// A short lead of silence written to each fresh ffplay. ffplay clips ~150ms while its audio device
+// starts up, which would otherwise eat the first syllable — let it clip the silence instead.
+const LEAD_SILENCE_MS = 250;
+const LEAD_SILENCE = Buffer.alloc(Math.round((REALTIME_SAMPLE_RATE * LEAD_SILENCE_MS) / 1000) * 2);
+
 /**
  * Sequential playback of the model's 24 kHz audio via ffplay, to the system DEFAULT output device
  * (set the EMEET as your default output in System Settings → Sound).
@@ -72,6 +77,7 @@ export class Playback extends EventEmitter {
     if (!this.proc) {
       this.writeIndex = 0;
       this.proc = this.spawn();
+      this.proc.stdin?.write(LEAD_SILENCE); // absorb ffplay's startup clipping so the first word isn't cut
       if (!this.active) {
         this.active = true;
         this.emit("playing");

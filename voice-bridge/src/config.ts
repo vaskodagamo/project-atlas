@@ -56,6 +56,15 @@ const schema = z.object({
   WIZ_LIGHT_IP: z.string().default(""),
   WIZ_LIGHT_NAME: z.string().default("office light"),
 
+  // Blink doorbell — proactive announcements (needs the Python helper auth'd; see blink/README.md).
+  BLINK_ENABLED: z.string().default("false").transform((v) => v === "true"),
+  BLINK_CAMERA: z.string().default(""),
+  BLINK_POLL_SECONDS: z.coerce.number().int().positive().default(20),
+  BLINK_PYTHON: z.string().default("blink/.venv/bin/python"),
+  BLINK_HELPER: z.string().default("blink/blink_helper.py"),
+  BLINK_VISION_MODEL: z.string().default("gpt-4o-mini"),
+  ANNOUNCE_TTS_MODEL: z.string().default("gpt-4o-mini-tts"),
+
   // EMEET audio (capture device; playback uses the system default output via ffplay)
   EMEET_DEVICE_NAME: z.string().default("EMEET"),
   CAPTURE_SAMPLE_RATE: z.coerce.number().int().positive().default(16000),
@@ -133,6 +142,15 @@ function load() {
     mac: { enabled: e.MAC_CONTROL },
     whatsapp: { enabled: e.WHATSAPP_ENABLED },
     wiz: { enabled: Boolean(e.WIZ_LIGHT_IP), ip: e.WIZ_LIGHT_IP, name: e.WIZ_LIGHT_NAME },
+    blink: {
+      enabled: e.BLINK_ENABLED && Boolean(e.BLINK_CAMERA),
+      camera: e.BLINK_CAMERA,
+      pollMs: e.BLINK_POLL_SECONDS * 1000,
+      python: e.BLINK_PYTHON,
+      helper: e.BLINK_HELPER,
+      visionModel: e.BLINK_VISION_MODEL,
+    },
+    announce: { ttsModel: e.ANNOUNCE_TTS_MODEL },
     audio: {
       deviceName: e.EMEET_DEVICE_NAME,
       captureSampleRate: e.CAPTURE_SAMPLE_RATE,

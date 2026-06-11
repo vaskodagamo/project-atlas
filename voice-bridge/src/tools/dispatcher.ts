@@ -5,6 +5,7 @@ import { listEmails, readEmail, draftEmail, type MailAccount } from "./email.js"
 import { openApp, setVolume, macSystem, runAppleScript, runShell } from "./mac.js";
 import { whatsapp } from "./whatsapp.js";
 import { controlLight, lightStatus } from "./wiz.js";
+import { describeDoor } from "./blink.js";
 
 /** JSON-Schema-ish parameter spec passed to the Realtime API. */
 export interface ToolDefinition {
@@ -300,6 +301,17 @@ if (config.wiz.enabled) {
       handler: () => lightStatus(),
     },
   );
+}
+
+// Blink doorbell — on-demand "who's at the door?" (proactive announcements are wired in index.ts).
+if (config.blink.enabled) {
+  tools.push({
+    name: "door_check",
+    description: "Check the front-door camera right now and describe who or what is at the door.",
+    parameters: { type: "object", properties: {} },
+    requiresConfirmation: false,
+    handler: () => describeDoor(),
+  });
 }
 
 const byName = new Map(tools.map((t) => [t.name, t]));

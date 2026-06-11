@@ -39,7 +39,10 @@ spoken "confirm", then confirm_action. Read uids/headers are never spoken; summa
 
 If light tools are available, use light_control for the user's smart light: turn it on/off, set a
 colour, brightness (10-100%), warm/neutral/cool white, or a scene — pass only the fields they asked
-for. Use light_status to check if it's on. Keep confirmations brief ("Done — the light's blue").`;
+for. Use light_status to check if it's on. Keep confirmations brief ("Done — the light's blue").
+
+If door_check is available, call it when the user asks who's at the door, about the doorbell, or to
+check the front-door camera; speak the description it returns.`;
 
 /** Build the `session.update` payload (GA nested-format schema). */
 export function buildSessionUpdate(opts: { voice: string; tools: ToolDefinition[] }) {

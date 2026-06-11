@@ -4,3 +4,6 @@ dist/
 *.log
 .DS_Store
 .whatsapp-auth/
+blink/.blink-creds.json
+blink/.venv/
+__pycache__/
