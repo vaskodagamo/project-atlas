@@ -7,7 +7,7 @@ import { log } from "../logger.js";
 // then asks an OpenAI vision model who's at the door. Proactive announcements are spoken via TTS
 // from index.ts. Blink is cloud-only + an unofficial API, so this is polling, not instant push.
 
-const SNAP_PATH = "/tmp/jarvis-door.jpg";
+export const DOOR_IMAGE = "/tmp/jarvis-door.jpg";
 
 interface DoorStatus {
   motion_detected: boolean | null;
@@ -61,9 +61,9 @@ async function snapshot(path: string): Promise<boolean> {
 /** Snap the doorbell and have a vision model describe who/what is there. Returns a spoken sentence. */
 export async function describeDoor(): Promise<string> {
   const fallback = "Someone's at the front door.";
-  if (!(await snapshot(SNAP_PATH))) return `${fallback} I couldn't grab a snapshot, though.`;
+  if (!(await snapshot(DOOR_IMAGE))) return `${fallback} I couldn't grab a snapshot, though.`;
   try {
-    const b64 = (await readFile(SNAP_PATH)).toString("base64");
+    const b64 = (await readFile(DOOR_IMAGE)).toString("base64");
     const res = await fetch("https://api.openai.com/v1/chat/completions", {
       method: "POST",
       headers: { Authorization: `Bearer ${config.openai.apiKey}`, "Content-Type": "application/json" },
@@ -104,7 +104,7 @@ export async function describeDoor(): Promise<string> {
  * Poll the doorbell; when a NEW clip is recorded (a ring or motion while armed), call onEvent with a
  * spoken announcement. The first poll just sets the baseline (no announcement on startup).
  */
-export function startDoorbellWatcher(onEvent: (announcement: string) => Promise<void>): void {
+export function startDoorbellWatcher(onEvent: (announcement: string, imagePath: string) => Promise<void>): void {
   let baseline: string | null = null;
   let busy = false;
 
@@ -123,7 +123,7 @@ export function startDoorbellWatcher(onEvent: (announcement: string) => Promise<
       busy = true;
       log.info("doorbell event", { last_record: status.last_record, recent_clips: status.recent_clips });
       try {
-        await onEvent(await describeDoor());
+        await onEvent(await describeDoor(), DOOR_IMAGE);
       } finally {
         busy = false;
       }

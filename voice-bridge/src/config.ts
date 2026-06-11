@@ -64,6 +64,8 @@ const schema = z.object({
   BLINK_HELPER: z.string().default("blink/blink_helper.py"),
   BLINK_VISION_MODEL: z.string().default("gpt-4o-mini"),
   ANNOUNCE_TTS_MODEL: z.string().default("gpt-4o-mini-tts"),
+  // Also send the doorbell snapshot + caption to this Telegram chat (via the OpenClaw bot). Blank = off.
+  BLINK_TELEGRAM_TARGET: z.string().default(""),
 
   // EMEET audio (capture device; playback uses the system default output via ffplay)
   EMEET_DEVICE_NAME: z.string().default("EMEET"),
@@ -149,6 +151,7 @@ function load() {
       python: e.BLINK_PYTHON,
       helper: e.BLINK_HELPER,
       visionModel: e.BLINK_VISION_MODEL,
+      telegramTarget: e.BLINK_TELEGRAM_TARGET,
     },
     announce: { ttsModel: e.ANNOUNCE_TTS_MODEL },
     audio: {
