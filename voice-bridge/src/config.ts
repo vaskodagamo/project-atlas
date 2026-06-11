@@ -37,6 +37,10 @@ const schema = z.object({
   IMAP_DRAFTS_FOLDER: z.string().default("Drafts"),
   EMAIL_FROM: z.string().default(""),
 
+  // Mac control (open apps, volume, AppleScript, shell). Powerful run_shell/run_applescript are
+  // gated behind a spoken confirmation. Set to false to disable all Mac control tools.
+  MAC_CONTROL: z.string().default("true").transform((v) => v !== "false"),
+
   // EMEET audio (capture device; playback uses the system default output via ffplay)
   EMEET_DEVICE_NAME: z.string().default("EMEET"),
   CAPTURE_SAMPLE_RATE: z.coerce.number().int().positive().default(16000),
@@ -83,6 +87,7 @@ function load() {
       draftsFolder: e.IMAP_DRAFTS_FOLDER,
       from: e.EMAIL_FROM || e.IMAP_USER,
     },
+    mac: { enabled: e.MAC_CONTROL },
     audio: {
       deviceName: e.EMEET_DEVICE_NAME,
       captureSampleRate: e.CAPTURE_SAMPLE_RATE,

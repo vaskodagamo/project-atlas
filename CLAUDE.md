@@ -85,8 +85,12 @@ npm start                     # push-to-talk (default): press Enter/space to tal
 - **Memory lives in OpenClaw**, not here. The bridge is stateless except for per-session state.
   The bridge reaches it by shelling out to `openclaw agent --json` (the gateway HTTP port is the
   Control UI, not an OpenAI-compatible API).
-- **Destructive tools (later)** must set `requiresConfirmation` in the dispatcher and gate behind a
-  spoken "confirm" step.
+- **Tools can be backed by OpenClaw or by local code.** Currently: memory → OpenClaw; **work email
+  (IMAP) and Mac control live locally in `src/tools/`** (lower latency, full control). Each capability
+  is gated by an env flag (`IMAP_*`, `MAC_CONTROL`) so it only loads when configured.
+- **Destructive tools** set `requiresConfirmation`; the dispatcher *stages* them and runs them only
+  after a spoken "confirm" (via the `confirm_action` tool). Mac `run_shell` / `run_applescript` use
+  this — they never execute on the first call.
 
 The full implementation plan is at
 `~/.claude/plans/build-me-a-local-rippling-peach.md`.
