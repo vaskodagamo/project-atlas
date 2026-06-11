@@ -64,6 +64,7 @@ const schema = z.object({
   BLINK_POLL_SECONDS: z.coerce.number().int().positive().default(20),
   BLINK_PYTHON: z.string().default("blink/.venv/bin/python"),
   BLINK_HELPER: z.string().default("blink/blink_helper.py"),
+  BLINK_WATCHER: z.string().default("blink/blink_watcher.py"),
   BLINK_VISION_MODEL: z.string().default("gpt-4o-mini"),
   ANNOUNCE_TTS_MODEL: z.string().default("gpt-4o-mini-tts"),
   // Also send the doorbell snapshot + caption to this Telegram chat (via the OpenClaw bot). Blank = off.
@@ -156,6 +157,7 @@ function load() {
       pollMs: e.BLINK_POLL_SECONDS * 1000,
       python: e.BLINK_PYTHON,
       helper: e.BLINK_HELPER,
+      watcher: e.BLINK_WATCHER,
       visionModel: e.BLINK_VISION_MODEL,
       telegramTarget: e.BLINK_TELEGRAM_TARGET,
       media: e.BLINK_MEDIA,

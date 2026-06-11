@@ -201,8 +201,8 @@ if (config.blink.enabled) {
   startDoorbellWatcher(async (text, imagePath, clipPath) => {
     log.info("doorbell announcement", { text, clip: Boolean(clipPath) });
     await speak(text, playback); // proactive: speak even with no active session
-    if (config.blink.telegramTarget) {
-      const media = clipPath ?? imagePath; // prefer the actual recorded clip; fall back to the still
+    const media = clipPath ?? imagePath; // prefer the recorded clip; fall back to the still
+    if (config.blink.telegramTarget && media) {
       await sendTelegramMedia(config.blink.telegramTarget, `🔔 ${text}\n🕐 ${berlinTime()} (Berlin)`, media);
     }
   });

@@ -1,18 +1,13 @@
-import { spawn } from "node:child_process";
+import { spawn, type ChildProcess } from "node:child_process";
 import { mkdirSync } from "node:fs";
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { config } from "../config.js";
 import { log } from "../logger.js";
 
-// Blink doorbell: shells out to the Python helper (blinkpy) to poll for events and snap a still,
-// then asks an OpenAI vision model who's at the door. Proactive announcements are spoken via TTS
-// from index.ts. Blink is cloud-only + an unofficial API, so this is polling, not instant push.
-
 // Saved under an OpenClaw-allowed dir (its workspace by default) so `openclaw message send --media`
 // is permitted — /tmp is rejected with "Local media path is not under an allowed directory".
 export const DOOR_IMAGE = join(config.blink.mediaDir, "door.jpg");
-export const DOOR_CLIP = join(config.blink.mediaDir, "door.mp4");
 
 function ensureMediaDir(): void {
   try {
@@ -22,14 +17,7 @@ function ensureMediaDir(): void {
   }
 }
 
-interface DoorStatus {
-  motion_detected: boolean | null;
-  last_record: unknown;
-  recent_clips: number;
-  thumb_ts: string;
-}
-
-function runHelper(args: string[], timeoutMs = 30000): Promise<string> {
+function runHelper(args: string[], timeoutMs = 45000): Promise<string> {
   return new Promise((resolve, reject) => {
     const child = spawn(config.blink.python, [config.blink.helper, ...args], { stdio: ["ignore", "pipe", "pipe"] });
     let out = "";
@@ -52,44 +40,11 @@ function runHelper(args: string[], timeoutMs = 30000): Promise<string> {
   });
 }
 
-export async function pollDoorbell(): Promise<DoorStatus | null> {
-  try {
-    return JSON.parse(await runHelper(["poll", config.blink.camera])) as DoorStatus;
-  } catch (err) {
-    log.error("blink poll failed", { err: String(err) });
-    return null;
-  }
-}
-
-async function snapshot(path: string): Promise<boolean> {
-  try {
-    await runHelper(["snapshot", config.blink.camera, path], 45000);
-    return true;
-  } catch (err) {
-    log.error("blink snapshot failed", { err: String(err) });
-    return false;
-  }
-}
-
-/** Download the just-recorded clip (mp4). Returns the path, or null if it isn't available yet. */
-async function downloadClip(): Promise<string | null> {
-  ensureMediaDir();
-  try {
-    await runHelper(["clip", config.blink.camera, DOOR_CLIP], 60000);
-    return DOOR_CLIP;
-  } catch (err) {
-    log.warn("blink clip download failed — will send the photo instead", { err: String(err) });
-    return null;
-  }
-}
-
-/** Snap the doorbell and have a vision model describe who/what is there. Returns a spoken sentence. */
-export async function describeDoor(): Promise<string> {
-  ensureMediaDir();
+/** Ask an OpenAI vision model who/what is in a door image. Returns a spoken sentence. */
+export async function describeImage(imagePath: string): Promise<string> {
   const fallback = "Someone's at the front door.";
-  if (!(await snapshot(DOOR_IMAGE))) return `${fallback} I couldn't grab a snapshot, though.`;
   try {
-    const b64 = (await readFile(DOOR_IMAGE)).toString("base64");
+    const b64 = (await readFile(imagePath)).toString("base64");
     const res = await fetch("https://api.openai.com/v1/chat/completions", {
       method: "POST",
       headers: { Authorization: `Bearer ${config.openai.apiKey}`, "Content-Type": "application/json" },
@@ -121,53 +76,97 @@ export async function describeDoor(): Promise<string> {
     const desc = data.choices?.[0]?.message?.content?.trim();
     return desc ? `Someone's at the front door. ${desc}` : fallback;
   } catch (err) {
-    log.error("describeDoor error", { err: String(err) });
+    log.error("describeImage error", { err: String(err) });
     return fallback;
   }
 }
 
+/** On-demand "who's at the door?": snapshot via the helper, then describe it. */
+export async function describeDoor(): Promise<string> {
+  ensureMediaDir();
+  try {
+    await runHelper(["snapshot", config.blink.camera, DOOR_IMAGE]);
+  } catch (err) {
+    log.error("blink snapshot failed", { err: String(err) });
+    return "Someone's at the front door. I couldn't grab a snapshot, though.";
+  }
+  return describeImage(DOOR_IMAGE);
+}
+
+interface WatcherMessage {
+  event?: boolean;
+  image?: string | null;
+  clip?: string | null;
+  ready?: boolean;
+  warn?: string;
+  fatal?: string;
+  camera?: string;
+  interval?: number;
+}
+
 /**
- * Poll the doorbell; when a NEW clip is recorded (a ring or motion while armed), call onEvent with a
- * spoken announcement. The first poll just sets the baseline (no announcement on startup).
+ * Spawn the long-lived Python watcher (ONE persistent Blink connection — keeps the token alive and
+ * watches both motion clips and button-press thumbnail changes). On each event it provides a captured
+ * still (+ clip if configured); we describe it and call onEvent. Auto-restarts if the watcher dies.
  */
 export function startDoorbellWatcher(
-  onEvent: (announcement: string, imagePath: string, clipPath: string | null) => Promise<void>,
+  onEvent: (announcement: string, imagePath: string | null, clipPath: string | null) => Promise<void>,
 ): void {
-  let baseline: string | null = null;
-  let busy = false; // an event is being described/announced
-  let polling = false; // a poll is already in flight (so fast intervals don't pile up)
+  ensureMediaDir();
+  const child: ChildProcess = spawn(
+    config.blink.python,
+    [config.blink.watcher, config.blink.camera, config.blink.mediaDir, config.blink.media],
+    { stdio: ["ignore", "pipe", "pipe"] },
+  );
 
-  const tick = async (): Promise<void> => {
-    if (busy || polling) return;
-    polling = true;
-    let status: DoorStatus | null;
+  let busy = false;
+  let buf = "";
+
+  const handleLine = async (line: string): Promise<void> => {
+    let msg: WatcherMessage;
     try {
-      status = await pollDoorbell();
-    } finally {
-      polling = false;
-    }
-    if (!status) return;
-    // A recorded clip is the reliable "someone did something" signal (ignore periodic thumbnail bumps).
-    const key = `${String(status.last_record ?? "")}|${status.recent_clips}`;
-    if (baseline === null) {
-      baseline = key;
+      msg = JSON.parse(line) as WatcherMessage;
+    } catch {
       return;
     }
-    if (key !== baseline) {
-      baseline = key;
+    if (msg.ready) {
+      log.info("doorbell watcher ready", { camera: msg.camera, everySeconds: msg.interval });
+      return;
+    }
+    if (msg.fatal) {
+      log.error("blink watcher fatal — re-auth needed?", { fatal: msg.fatal });
+      return;
+    }
+    if (msg.warn) {
+      log.warn("blink watcher", { warn: msg.warn });
+      return;
+    }
+    if (msg.event && !busy) {
       busy = true;
-      log.info("doorbell event", { last_record: status.last_record, recent_clips: status.recent_clips });
+      log.info("doorbell event", { hasImage: Boolean(msg.image), hasClip: Boolean(msg.clip) });
       try {
-        const description = await describeDoor(); // snapshot still + vision (also leaves DOOR_IMAGE)
-        // In "photo" mode skip the clip download (faster); otherwise grab the recorded footage.
-        const clip = config.blink.media === "photo" ? null : await downloadClip();
-        await onEvent(description, DOOR_IMAGE, clip);
+        const image = msg.image ?? null;
+        const description = image ? await describeImage(image) : "Someone's at the front door.";
+        await onEvent(description, image, msg.clip ?? null);
       } finally {
         busy = false;
       }
     }
   };
 
-  setInterval(() => void tick().catch((e) => log.error("doorbell tick failed", { err: String(e) })), config.blink.pollMs);
-  log.info("doorbell watcher started", { camera: config.blink.camera, everySeconds: config.blink.pollMs / 1000 });
+  child.stdout?.on("data", (d: Buffer) => {
+    buf += d.toString();
+    let nl: number;
+    while ((nl = buf.indexOf("\n")) >= 0) {
+      const line = buf.slice(0, nl).trim();
+      buf = buf.slice(nl + 1);
+      if (line) void handleLine(line).catch((e) => log.error("doorbell handleLine failed", { err: String(e) }));
+    }
+  });
+  child.stderr?.on("data", (d: Buffer) => log.debug("blink watcher stderr", { msg: d.toString().trim() }));
+  child.on("error", (e) => log.error("blink watcher spawn failed", { err: String(e) }));
+  child.on("close", (code) => {
+    log.warn("blink watcher exited — restarting in 10s", { code });
+    setTimeout(() => startDoorbellWatcher(onEvent), 10000);
+  });
 }
