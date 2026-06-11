@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  Template — do NOT load this directly. Run ops/install-service.sh, which fills in the @@...@@
+  placeholders with absolute paths and installs it to ~/Library/LaunchAgents.
+
+  It MUST be a LaunchAgent (per-user GUI session), never a LaunchDaemon: CoreAudio and the
+  microphone TCC permission require a logged-in user session. A pre-login daemon gets silent zeros.
+-->
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>com.jarvis.voicebridge</string>
+
+  <key>ProgramArguments</key>
+  <array>
+    <string>@@NODE@@</string>
+    <string>@@TSX@@</string>
+    <string>@@ENTRY@@</string>
+  </array>
+
+  <key>WorkingDirectory</key>
+  <string>@@DIR@@</string>
+
+  <key>EnvironmentVariables</key>
+  <dict>
+    <!-- @@NODEBIN@@ is the dir holding node + the global `openclaw` CLI (install-service.sh fills it). -->
+    <key>PATH</key>
+    <string>@@NODEBIN@@:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin</string>
+  </dict>
+
+  <key>RunAtLoad</key>
+  <true/>
+  <key>KeepAlive</key>
+  <true/>
+  <key>ThrottleInterval</key>
+  <integer>10</integer>
+
+  <key>StandardOutPath</key>
+  <string>@@LOGDIR@@/voicebridge.out.log</string>
+  <key>StandardErrorPath</key>
+  <string>@@LOGDIR@@/voicebridge.err.log</string>
+</dict>
+</plist>

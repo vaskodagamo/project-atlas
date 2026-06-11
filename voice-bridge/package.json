@@ -1,0 +1,29 @@
+{
+  "name": "voice-bridge",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Jarvis voice bridge: 'Hey Jarvis' wake word <-> OpenAI Realtime <-> EMEET 360, with OpenClaw as the tool/memory backbone.",
+  "engines": {
+    "node": ">=22.19"
+  },
+  "scripts": {
+    "start": "tsx src/index.ts",
+    "dev": "tsx watch src/index.ts",
+    "typecheck": "tsc --noEmit",
+    "list-devices": "tsx src/audio/list-devices.ts",
+    "test:openclaw": "tsx scripts/test-openclaw.ts"
+  },
+  "dependencies": {
+    "@picovoice/porcupine-node": "^3.0.3",
+    "dotenv": "^16.4.7",
+    "ws": "^8.18.0",
+    "zod": "^3.24.1"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.5",
+    "@types/ws": "^8.5.13",
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.3"
+  }
+}
