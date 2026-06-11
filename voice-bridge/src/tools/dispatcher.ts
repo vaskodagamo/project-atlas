@@ -1,7 +1,7 @@
 import { config } from "../config.js";
 import { log } from "../logger.js";
 import { askOpenclaw } from "./openclaw.js";
-import { listEmails, readEmail, draftEmail } from "./email.js";
+import { listEmails, readEmail, draftEmail, type MailAccount } from "./email.js";
 import { openApp, setVolume, macSystem, runAppleScript, runShell } from "./mac.js";
 
 /** JSON-Schema-ish parameter spec passed to the Realtime API. */
@@ -44,44 +44,82 @@ const tools: ToolDefinition[] = [
   },
 ];
 
-// Email tools load only when IMAP is configured (read + draft; nothing is ever sent).
+// Email tools load when at least one account (IMAP and/or Gmail) is configured. Read + draft only.
+const emailAccounts = config.email.accounts as MailAccount[];
+const accountLabels = emailAccounts.map((a) => a.label);
+
+/** Resolve an account label the model passed to a configured account (defaults to the first). */
+function resolveAccount(label?: unknown): MailAccount | undefined {
+  if (emailAccounts.length === 0) return undefined;
+  if (typeof label === "string" && label.trim()) {
+    const want = label.trim().toLowerCase();
+    const exact = emailAccounts.find((a) => a.label.toLowerCase() === want);
+    if (exact) return exact;
+    const fuzzy = emailAccounts.find(
+      (a) => a.label.toLowerCase().includes(want) || want.includes(a.label.toLowerCase()),
+    );
+    if (fuzzy) return fuzzy;
+  }
+  return emailAccounts[0];
+}
+
 if (config.email.enabled) {
+  const accountProp = {
+    type: "string",
+    enum: accountLabels,
+    description: `Which email account: ${accountLabels.join(" or ")}. Defaults to ${accountLabels[0]} if omitted.`,
+  };
   tools.push(
     {
       name: "email_list",
       description:
-        "List the user's recent work emails (subjects + senders). Set unreadOnly to focus on unread. " +
-        "Returns a numbered list with a uid for each, for use with email_read.",
+        `List recent emails (subjects + senders) from one of the user's accounts (${accountLabels.join(", ")}). ` +
+        "Set unreadOnly for unread only. Returns a numbered list with a uid for each, for email_read.",
       parameters: {
         type: "object",
         properties: {
+          account: accountProp,
           unreadOnly: { type: "boolean", description: "Only unread messages." },
           limit: { type: "number", description: "How many to list (1-25, default 10)." },
         },
       },
       requiresConfirmation: false,
-      handler: (args) =>
-        listEmails({ unreadOnly: Boolean(args.unreadOnly), limit: typeof args.limit === "number" ? args.limit : undefined }),
+      handler: (args) => {
+        const acc = resolveAccount(args.account);
+        if (!acc) return Promise.resolve("No email account is configured.");
+        return listEmails(acc, {
+          unreadOnly: Boolean(args.unreadOnly),
+          limit: typeof args.limit === "number" ? args.limit : undefined,
+        });
+      },
     },
     {
       name: "email_read",
-      description: "Read one work email in full by its uid (from email_list).",
+      description: "Read one email in full by its uid (from email_list), on the same account.",
       parameters: {
         type: "object",
-        properties: { uid: { type: "number", description: "The message uid from email_list." } },
+        properties: {
+          account: accountProp,
+          uid: { type: "number", description: "The message uid from email_list." },
+        },
         required: ["uid"],
       },
       requiresConfirmation: false,
-      handler: (args) => readEmail({ uid: Number(args.uid) }),
+      handler: (args) => {
+        const acc = resolveAccount(args.account);
+        if (!acc) return Promise.resolve("No email account is configured.");
+        return readEmail(acc, { uid: Number(args.uid) });
+      },
     },
     {
       name: "email_draft",
       description:
-        "Save a DRAFT work email to the Drafts folder. This never sends — it only saves a draft for the " +
-        "user to review and send themselves.",
+        "Save a DRAFT email to the chosen account's Drafts folder. Never sends — only saves a draft for " +
+        "the user to review and send themselves.",
       parameters: {
         type: "object",
         properties: {
+          account: accountProp,
           to: { type: "string", description: "Recipient email address." },
           subject: { type: "string", description: "Subject line." },
           body: { type: "string", description: "Plain-text body." },
@@ -89,12 +127,15 @@ if (config.email.enabled) {
         required: ["to", "body"],
       },
       requiresConfirmation: false, // saving a draft is non-destructive; sending is not supported
-      handler: (args) =>
-        draftEmail({
+      handler: (args) => {
+        const acc = resolveAccount(args.account);
+        if (!acc) return Promise.resolve("No email account is configured.");
+        return draftEmail(acc, {
           to: String(args.to ?? ""),
           subject: String(args.subject ?? ""),
           body: String(args.body ?? ""),
-        }),
+        });
+      },
     },
   );
 }

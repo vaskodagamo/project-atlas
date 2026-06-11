@@ -28,7 +28,8 @@ const schema = z.object({
     .enum(["off", "minimal", "low", "medium", "high", "xhigh", "adaptive", "max"])
     .default("off"),
 
-  // Work email over IMAP (optional — email tools only load when host/user/password are all set).
+  // Email account 1 — generic IMAP (e.g. work). Tools load when host/user/password are all set.
+  IMAP_LABEL: z.string().default("work"),
   IMAP_HOST: z.string().default(""),
   IMAP_PORT: z.coerce.number().int().positive().default(993),
   IMAP_USER: z.string().default(""),
@@ -36,6 +37,12 @@ const schema = z.object({
   IMAP_TLS: z.string().default("true").transform((v) => v !== "false"),
   IMAP_DRAFTS_FOLDER: z.string().default("Drafts"),
   EMAIL_FROM: z.string().default(""),
+
+  // Email account 2 — Gmail via app password (host/port/Drafts are preset for Gmail).
+  GMAIL_LABEL: z.string().default("personal"),
+  GMAIL_USER: z.string().default(""),
+  GMAIL_APP_PASSWORD: z.string().default(""),
+  GMAIL_DRAFTS_FOLDER: z.string().default("[Gmail]/Drafts"),
 
   // Mac control (open apps, volume, AppleScript, shell). Powerful run_shell/run_applescript are
   // gated behind a spoken confirmation. Set to false to disable all Mac control tools.
@@ -60,6 +67,43 @@ function load() {
     process.exit(1);
   }
   const e = parsed.data;
+
+  // Build the list of configured email accounts (generic IMAP + Gmail).
+  const emailAccounts: Array<{
+    label: string;
+    host: string;
+    port: number;
+    user: string;
+    password: string;
+    tls: boolean;
+    draftsFolder: string;
+    from: string;
+  }> = [];
+  if (e.IMAP_HOST && e.IMAP_USER && e.IMAP_PASSWORD) {
+    emailAccounts.push({
+      label: e.IMAP_LABEL,
+      host: e.IMAP_HOST,
+      port: e.IMAP_PORT,
+      user: e.IMAP_USER,
+      password: e.IMAP_PASSWORD,
+      tls: e.IMAP_TLS,
+      draftsFolder: e.IMAP_DRAFTS_FOLDER,
+      from: e.EMAIL_FROM || e.IMAP_USER,
+    });
+  }
+  if (e.GMAIL_USER && e.GMAIL_APP_PASSWORD) {
+    emailAccounts.push({
+      label: e.GMAIL_LABEL,
+      host: "imap.gmail.com",
+      port: 993,
+      user: e.GMAIL_USER,
+      password: e.GMAIL_APP_PASSWORD,
+      tls: true,
+      draftsFolder: e.GMAIL_DRAFTS_FOLDER,
+      from: e.GMAIL_USER,
+    });
+  }
+
   return {
     openai: {
       apiKey: e.OPENAI_API_KEY,
@@ -77,16 +121,7 @@ function load() {
       agent: e.OPENCLAW_AGENT,
       thinking: e.OPENCLAW_THINKING,
     },
-    email: {
-      enabled: Boolean(e.IMAP_HOST && e.IMAP_USER && e.IMAP_PASSWORD),
-      host: e.IMAP_HOST,
-      port: e.IMAP_PORT,
-      user: e.IMAP_USER,
-      password: e.IMAP_PASSWORD,
-      tls: e.IMAP_TLS,
-      draftsFolder: e.IMAP_DRAFTS_FOLDER,
-      from: e.EMAIL_FROM || e.IMAP_USER,
-    },
+    email: { enabled: emailAccounts.length > 0, accounts: emailAccounts },
     mac: { enabled: e.MAC_CONTROL },
     audio: {
       deviceName: e.EMEET_DEVICE_NAME,
