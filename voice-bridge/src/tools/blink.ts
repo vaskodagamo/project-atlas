@@ -134,11 +134,18 @@ export function startDoorbellWatcher(
   onEvent: (announcement: string, imagePath: string, clipPath: string | null) => Promise<void>,
 ): void {
   let baseline: string | null = null;
-  let busy = false;
+  let busy = false; // an event is being described/announced
+  let polling = false; // a poll is already in flight (so fast intervals don't pile up)
 
   const tick = async (): Promise<void> => {
-    if (busy) return; // don't overlap a slow describe/announce with the next poll
-    const status = await pollDoorbell();
+    if (busy || polling) return;
+    polling = true;
+    let status: DoorStatus | null;
+    try {
+      status = await pollDoorbell();
+    } finally {
+      polling = false;
+    }
     if (!status) return;
     // A recorded clip is the reliable "someone did something" signal (ignore periodic thumbnail bumps).
     const key = `${String(status.last_record ?? "")}|${status.recent_clips}`;
