@@ -1,3 +1,5 @@
+import os from "node:os";
+import path from "node:path";
 import { config as loadEnv } from "dotenv";
 import { z } from "zod";
 
@@ -66,6 +68,10 @@ const schema = z.object({
   ANNOUNCE_TTS_MODEL: z.string().default("gpt-4o-mini-tts"),
   // Also send the doorbell snapshot + caption to this Telegram chat (via the OpenClaw bot). Blank = off.
   BLINK_TELEGRAM_TARGET: z.string().default(""),
+  // What to send to Telegram on a ring: the recorded "video" clip, or just a "photo" (snapshot).
+  BLINK_MEDIA: z.enum(["video", "photo"]).default("video"),
+  // Where to save door snapshots/clips. MUST be under an OpenClaw-allowed dir (its workspace) to send.
+  BLINK_MEDIA_DIR: z.string().default(""),
 
   // EMEET audio (capture device; playback uses the system default output via ffplay)
   EMEET_DEVICE_NAME: z.string().default("EMEET"),
@@ -152,6 +158,9 @@ function load() {
       helper: e.BLINK_HELPER,
       visionModel: e.BLINK_VISION_MODEL,
       telegramTarget: e.BLINK_TELEGRAM_TARGET,
+      media: e.BLINK_MEDIA,
+      // Default to the OpenClaw workspace (its allowed media dir) so Telegram sends are permitted.
+      mediaDir: e.BLINK_MEDIA_DIR || path.join(os.homedir(), ".openclaw", "workspace", "jarvis-doorbell"),
     },
     announce: { ttsModel: e.ANNOUNCE_TTS_MODEL },
     audio: {

@@ -1,5 +1,7 @@
 import { spawn } from "node:child_process";
+import { mkdirSync } from "node:fs";
 import { readFile } from "node:fs/promises";
+import { join } from "node:path";
 import { config } from "../config.js";
 import { log } from "../logger.js";
 
@@ -7,8 +9,18 @@ import { log } from "../logger.js";
 // then asks an OpenAI vision model who's at the door. Proactive announcements are spoken via TTS
 // from index.ts. Blink is cloud-only + an unofficial API, so this is polling, not instant push.
 
-export const DOOR_IMAGE = "/tmp/jarvis-door.jpg";
-export const DOOR_CLIP = "/tmp/jarvis-door.mp4";
+// Saved under an OpenClaw-allowed dir (its workspace by default) so `openclaw message send --media`
+// is permitted — /tmp is rejected with "Local media path is not under an allowed directory".
+export const DOOR_IMAGE = join(config.blink.mediaDir, "door.jpg");
+export const DOOR_CLIP = join(config.blink.mediaDir, "door.mp4");
+
+function ensureMediaDir(): void {
+  try {
+    mkdirSync(config.blink.mediaDir, { recursive: true });
+  } catch (err) {
+    log.error("could not create Blink media dir", { dir: config.blink.mediaDir, err: String(err) });
+  }
+}
 
 interface DoorStatus {
   motion_detected: boolean | null;
@@ -61,6 +73,7 @@ async function snapshot(path: string): Promise<boolean> {
 
 /** Download the just-recorded clip (mp4). Returns the path, or null if it isn't available yet. */
 async function downloadClip(): Promise<string | null> {
+  ensureMediaDir();
   try {
     await runHelper(["clip", config.blink.camera, DOOR_CLIP], 60000);
     return DOOR_CLIP;
@@ -72,6 +85,7 @@ async function downloadClip(): Promise<string | null> {
 
 /** Snap the doorbell and have a vision model describe who/what is there. Returns a spoken sentence. */
 export async function describeDoor(): Promise<string> {
+  ensureMediaDir();
   const fallback = "Someone's at the front door.";
   if (!(await snapshot(DOOR_IMAGE))) return `${fallback} I couldn't grab a snapshot, though.`;
   try {
@@ -138,7 +152,8 @@ export function startDoorbellWatcher(
       log.info("doorbell event", { last_record: status.last_record, recent_clips: status.recent_clips });
       try {
         const description = await describeDoor(); // snapshot still + vision (also leaves DOOR_IMAGE)
-        const clip = await downloadClip(); // the actual recorded footage (mp4), if ready
+        // In "photo" mode skip the clip download (faster); otherwise grab the recorded footage.
+        const clip = config.blink.media === "photo" ? null : await downloadClip();
         await onEvent(description, DOOR_IMAGE, clip);
       } finally {
         busy = false;
