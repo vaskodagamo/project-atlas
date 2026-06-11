@@ -41,7 +41,8 @@ const schema = z.object({
   // Email account 2 — Gmail via app password (host/port/Drafts are preset for Gmail).
   GMAIL_LABEL: z.string().default("personal"),
   GMAIL_USER: z.string().default(""),
-  GMAIL_APP_PASSWORD: z.string().default(""),
+  // Gmail shows the app password in 4 space-separated groups; the real value has no spaces.
+  GMAIL_APP_PASSWORD: z.string().default("").transform((v) => v.replace(/\s+/g, "")),
   GMAIL_DRAFTS_FOLDER: z.string().default("[Gmail]/Drafts"),
 
   // Mac control (open apps, volume, AppleScript, shell). Powerful run_shell/run_applescript are
