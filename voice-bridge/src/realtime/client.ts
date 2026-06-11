@@ -113,7 +113,7 @@ export class RealtimeClient extends EventEmitter {
         const b64 = typeof msg.delta === "string" ? msg.delta : "";
         if (b64) {
           this.audioChunks++;
-          if (this.audioChunks === 1) log.info("receiving reply audio from model");
+          if (this.audioChunks === 1) log.debug("receiving reply audio from model");
           this.emit("audio", base64ToInt16(b64));
         }
         break;
@@ -151,11 +151,7 @@ export class RealtimeClient extends EventEmitter {
           }
         }
         this.responseActive = false;
-        if (this.audioChunks === 0) {
-          log.warn("response produced no audio (text-only) — check session output_modalities");
-        } else {
-          log.info("reply complete", { audioChunks: this.audioChunks });
-        }
+        log.debug("reply complete", { audioChunks: this.audioChunks });
         this.emit("assistant_done");
         break;
       }
@@ -166,9 +162,16 @@ export class RealtimeClient extends EventEmitter {
         this.responseActive = false;
         break;
 
-      case "error":
+      case "error": {
+        const err = msg.error as { code?: string } | undefined;
+        // Benign: a cancel that raced a just-finished response. Not worth alarming the user.
+        if (err?.code === "response_cancel_not_active") {
+          log.debug("ignoring benign response_cancel_not_active");
+          break;
+        }
         this.emit("error", new Error(JSON.stringify(msg.error ?? msg)));
         break;
+      }
 
       default:
         log.debug("realtime event", { type });

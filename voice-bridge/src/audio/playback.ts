@@ -4,21 +4,29 @@ import { log } from "../logger.js";
 import { int16ToBuffer } from "./pcm.js";
 
 /**
- * Playback of the model's 24 kHz audio via ffplay, to the system DEFAULT output device — so set the
- * EMEET 360 as your default output (System Settings → Sound). (ffplay uses SDL and can't target a
- * named CoreAudio device, unlike capture.)
+ * Playback of the model's 24 kHz audio via ffplay, to the system DEFAULT output device (so set the
+ * EMEET as your default output in System Settings → Sound).
  *
- * The ffplay process is spawned lazily on the first audio of a turn and kept warm across turns, so
- * normal replies have no spawn latency. On barge-in we `flush()`, which KILLS ffplay — the fastest
- * possible way to stop Jarvis mid-sentence. The next reply respawns it (a one-time ~100 ms cost paid
- * only after an interruption). The EMEET's hardware echo cancellation keeps playback from being
- * picked up as user speech.
+ * One ffplay process PER response. When a new response begins (startResponse) we CLOSE the previous
+ * player's stdin instead of killing it — so it finishes its buffered audio and exits cleanly via
+ * -autoexit. That avoids both failure modes we hit:
+ *   - killing it → the previous turn (e.g. "let me check…" before a tool result) gets cut off;
+ *   - reusing it → a drained ffplay silently swallows the next reply.
+ * Barge-in calls flush(), which SIGKILLs the current player for an instant stop. The EMEET's
+ * hardware echo cancellation keeps playback from being heard as user speech.
  */
 export class Playback {
   private proc: ChildProcess | null = null;
 
   start(): void {
-    // ffplay is spawned lazily on first write; nothing to do here.
+    // players are spawned lazily on the first audio chunk of each response
+  }
+
+  /** A new response is starting: let the previous player drain + exit, start fresh on next audio. */
+  startResponse(): void {
+    const prev = this.proc;
+    this.proc = null;
+    prev?.stdin?.end(); // EOF: ffplay finishes buffered audio, then exits (-autoexit)
   }
 
   write(samples: Int16Array): void {
@@ -42,7 +50,7 @@ export class Playback {
       ],
       { stdio: ["pipe", "ignore", "pipe"] },
     );
-    log.info("playback: ffplay started", { pid: proc.pid });
+    log.debug("playback: ffplay started", { pid: proc.pid });
     proc.on("error", (err: Error) => {
       log.error("playback: ffplay failed to start — is ffplay on PATH?", { err: String(err) });
       if (this.proc === proc) this.proc = null;
@@ -51,7 +59,10 @@ export class Playback {
       log.debug("playback: ffplay exited", { code });
       if (this.proc === proc) this.proc = null;
     });
-    proc.stderr?.on("data", (d: Buffer) => log.warn("ffplay stderr", { msg: d.toString().trim() }));
+    proc.stderr?.on("data", (d: Buffer) => {
+      const msg = d.toString().trim();
+      if (/[a-zA-Z]/.test(msg)) log.warn("ffplay stderr", { msg }); // skip bare terminal escape codes
+    });
     proc.stdin?.on("error", () => {
       /* ignore EPIPE when we kill mid-write */
     });
@@ -59,7 +70,7 @@ export class Playback {
     return proc;
   }
 
-  /** Barge-in: stop playback immediately by killing ffplay. */
+  /** Barge-in: stop playback immediately. */
   flush(): void {
     const proc = this.proc;
     this.proc = null;

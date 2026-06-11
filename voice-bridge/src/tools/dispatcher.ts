@@ -1,5 +1,7 @@
+import { config } from "../config.js";
 import { log } from "../logger.js";
 import { askOpenclaw } from "./openclaw.js";
+import { listEmails, readEmail, draftEmail } from "./email.js";
 
 /** JSON-Schema-ish parameter spec passed to the Realtime API. */
 export interface ToolDefinition {
@@ -40,6 +42,61 @@ const tools: ToolDefinition[] = [
     },
   },
 ];
+
+// Email tools load only when IMAP is configured (read + draft; nothing is ever sent).
+if (config.email.enabled) {
+  tools.push(
+    {
+      name: "email_list",
+      description:
+        "List the user's recent work emails (subjects + senders). Set unreadOnly to focus on unread. " +
+        "Returns a numbered list with a uid for each, for use with email_read.",
+      parameters: {
+        type: "object",
+        properties: {
+          unreadOnly: { type: "boolean", description: "Only unread messages." },
+          limit: { type: "number", description: "How many to list (1-25, default 10)." },
+        },
+      },
+      requiresConfirmation: false,
+      handler: (args) =>
+        listEmails({ unreadOnly: Boolean(args.unreadOnly), limit: typeof args.limit === "number" ? args.limit : undefined }),
+    },
+    {
+      name: "email_read",
+      description: "Read one work email in full by its uid (from email_list).",
+      parameters: {
+        type: "object",
+        properties: { uid: { type: "number", description: "The message uid from email_list." } },
+        required: ["uid"],
+      },
+      requiresConfirmation: false,
+      handler: (args) => readEmail({ uid: Number(args.uid) }),
+    },
+    {
+      name: "email_draft",
+      description:
+        "Save a DRAFT work email to the Drafts folder. This never sends — it only saves a draft for the " +
+        "user to review and send themselves.",
+      parameters: {
+        type: "object",
+        properties: {
+          to: { type: "string", description: "Recipient email address." },
+          subject: { type: "string", description: "Subject line." },
+          body: { type: "string", description: "Plain-text body." },
+        },
+        required: ["to", "body"],
+      },
+      requiresConfirmation: false, // saving a draft is non-destructive; sending is not supported
+      handler: (args) =>
+        draftEmail({
+          to: String(args.to ?? ""),
+          subject: String(args.subject ?? ""),
+          body: String(args.body ?? ""),
+        }),
+    },
+  );
+}
 
 const byName = new Map(tools.map((t) => [t.name, t]));
 

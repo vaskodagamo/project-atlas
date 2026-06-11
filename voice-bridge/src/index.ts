@@ -78,11 +78,13 @@ async function startSession(): Promise<void> {
   client.on("audio", (pcm: Int16Array) => playback.write(pcm));
   client.on("speech_started", () => {
     log.info("heard you — listening");
-    playback.flush(); // stop talking the instant the user does
-    client.cancelResponse(); // no-op unless a reply is actually in progress
+    playback.flush(); // stop talking the instant the user does; server_vad cancels the response
     armInactivity();
   });
-  client.on("response_started", () => log.info("Jarvis is replying"));
+  client.on("response_started", () => {
+    log.info("Jarvis is replying");
+    playback.startResponse(); // fresh ffplay for this response (fixes post-tool reply being silent)
+  });
   client.on("assistant_done", () => armInactivity());
   client.on("function_call", async (call: FunctionCall) => {
     log.info("tool call", { name: call.name, args: call.args });

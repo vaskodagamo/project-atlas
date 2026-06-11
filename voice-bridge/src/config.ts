@@ -28,6 +28,15 @@ const schema = z.object({
     .enum(["off", "minimal", "low", "medium", "high", "xhigh", "adaptive", "max"])
     .default("off"),
 
+  // Work email over IMAP (optional — email tools only load when host/user/password are all set).
+  IMAP_HOST: z.string().default(""),
+  IMAP_PORT: z.coerce.number().int().positive().default(993),
+  IMAP_USER: z.string().default(""),
+  IMAP_PASSWORD: z.string().default(""),
+  IMAP_TLS: z.string().default("true").transform((v) => v !== "false"),
+  IMAP_DRAFTS_FOLDER: z.string().default("Drafts"),
+  EMAIL_FROM: z.string().default(""),
+
   // EMEET audio (capture device; playback uses the system default output via ffplay)
   EMEET_DEVICE_NAME: z.string().default("EMEET"),
   CAPTURE_SAMPLE_RATE: z.coerce.number().int().positive().default(16000),
@@ -63,6 +72,16 @@ function load() {
       bin: e.OPENCLAW_BIN,
       agent: e.OPENCLAW_AGENT,
       thinking: e.OPENCLAW_THINKING,
+    },
+    email: {
+      enabled: Boolean(e.IMAP_HOST && e.IMAP_USER && e.IMAP_PASSWORD),
+      host: e.IMAP_HOST,
+      port: e.IMAP_PORT,
+      user: e.IMAP_USER,
+      password: e.IMAP_PASSWORD,
+      tls: e.IMAP_TLS,
+      draftsFolder: e.IMAP_DRAFTS_FOLDER,
+      from: e.EMAIL_FROM || e.IMAP_USER,
     },
     audio: {
       deviceName: e.EMEET_DEVICE_NAME,

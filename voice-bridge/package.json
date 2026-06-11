@@ -12,15 +12,19 @@
     "dev": "tsx watch src/index.ts",
     "typecheck": "tsc --noEmit",
     "list-devices": "tsx src/audio/list-devices.ts",
-    "test:openclaw": "tsx scripts/test-openclaw.ts"
+    "test:openclaw": "tsx scripts/test-openclaw.ts",
+    "test:email": "tsx scripts/test-email.ts"
   },
   "dependencies": {
     "@picovoice/porcupine-node": "^3.0.3",
     "dotenv": "^16.4.7",
+    "imapflow": "^1.0.181",
+    "mailparser": "^3.7.2",
     "ws": "^8.18.0",
     "zod": "^3.24.1"
   },
   "devDependencies": {
+    "@types/mailparser": "^3.4.5",
     "@types/node": "^22.10.5",
     "@types/ws": "^8.5.13",
     "tsx": "^4.19.2",

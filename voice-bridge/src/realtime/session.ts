@@ -9,7 +9,13 @@ You have a tool, ask_openclaw, backed by the user's self-hosted OpenClaw agent, 
 user's long-term memory and can run tasks. Call it whenever the user asks you to REMEMBER something,
 RECALL something you wouldn't otherwise know, or do anything that needs stored knowledge or
 automation. Pass a clear natural-language instruction as the prompt and speak the result back
-concisely. For ordinary chit-chat or general knowledge, just answer directly without the tool.`;
+concisely. For ordinary chit-chat or general knowledge, just answer directly without the tool.
+
+If email tools (email_list, email_read, email_draft) are available, use them for the user's work
+email: list/triage and summarise messages out loud, read one in full when asked, and prepare DRAFTS.
+You can NOT send email — email_draft only saves a draft for the user to review and send themselves;
+make that clear if they ask you to send. When listing emails, summarise naturally — don't read uids
+or raw headers aloud.`;
 
 /** Build the `session.update` payload (GA nested-format schema). */
 export function buildSessionUpdate(opts: { voice: string; tools: ToolDefinition[] }) {
