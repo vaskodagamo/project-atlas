@@ -52,30 +52,19 @@ def key_of(attrs):
 
 
 async def capture(blink, cam):
-    """Snap a FRESH still (and clip if wanted) on the live connection. Returns (image, clip).
+    """Download the event's image (and clip if wanted). Returns (image, clip).
 
-    A battery doorbell takes several seconds to actually capture + upload a new image. image_to_file
-    downloads whatever the current thumbnail URL points at, so if we read too soon we'd save the LAST
-    real capture (yesterday's). So: request a new image, then wait until the thumbnail timestamp
-    advances (new image is ready) before saving — up to ~14s.
+    The press/motion that triggered us ALREADY produced a fresh thumbnail (that's what we detected),
+    so we just download it — no slow snap_picture()+wait, which on a battery doorbell adds ~30-60s and
+    would show a later, emptier frame instead of the moment of the press.
     """
     img = None
     clip = None
     try:
-        before = thumb_ts(cam.attributes or {})
-        await cam.snap_picture()  # ask the camera for a fresh image
-        for _ in range(7):
-            await asyncio.sleep(2)
-            try:
-                await blink.refresh(force=True)
-            except Exception:  # noqa: BLE001
-                pass
-            if thumb_ts(cam.attributes or {}) != before:
-                break  # the fresh image has uploaded
         await cam.image_to_file(IMAGE)
         img = IMAGE
     except Exception as e:  # noqa: BLE001
-        emit({"warn": f"snapshot failed: {e}"})
+        emit({"warn": f"image fetch failed: {e}"})
     if WANT_CLIP:
         try:
             await cam.video_to_file(CLIP)
@@ -122,11 +111,8 @@ async def main():
             attrs = cam.attributes or {}
             if key_of(attrs) == baseline:
                 continue
-
+            baseline = key_of(attrs)  # mark seen before capturing (we no longer change the thumbnail)
             img, clip = await capture(blink, cam)
-            # Our own snapshot bumped the thumbnail ts — re-baseline AFTER capturing so we don't loop.
-            await blink.refresh(force=True)
-            baseline = key_of(cam.attributes or {})
             emit({"event": True, "image": img, "clip": clip, "last_record": str(attrs.get("last_record"))})
 
 
