@@ -1,13 +1,20 @@
 import { spawn, type ChildProcess } from "node:child_process";
 import { mkdirSync } from "node:fs";
-import { readFile } from "node:fs/promises";
+import { readFile, unlink } from "node:fs/promises";
 import { join } from "node:path";
 import { config } from "../config.js";
 import { log } from "../logger.js";
 
 // Saved under an OpenClaw-allowed dir (its workspace by default) so `openclaw message send --media`
-// is permitted — /tmp is rejected with "Local media path is not under an allowed directory".
+// is permitted — /tmp is rejected with "Local media path is not under an allowed directory". Reused
+// (overwritten) each event, and deleted right after use, so nothing accumulates on disk.
 export const DOOR_IMAGE = join(config.blink.mediaDir, "door.jpg");
+const DOOR_CLIP = join(config.blink.mediaDir, "door.mp4");
+
+/** Delete the door snapshot/clip so nothing lingers on disk. */
+export async function cleanupDoorMedia(): Promise<void> {
+  await Promise.all([unlink(DOOR_IMAGE).catch(() => {}), unlink(DOOR_CLIP).catch(() => {})]);
+}
 
 function ensureMediaDir(): void {
   try {
@@ -90,7 +97,9 @@ export async function describeDoor(): Promise<string> {
     log.error("blink snapshot failed", { err: String(err) });
     return "Someone's at the front door. I couldn't grab a snapshot, though.";
   }
-  return describeImage(DOOR_IMAGE);
+  const description = await describeImage(DOOR_IMAGE);
+  await cleanupDoorMedia(); // on-demand check doesn't send anywhere — don't leave the file behind
+  return description;
 }
 
 interface WatcherMessage {

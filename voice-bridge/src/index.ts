@@ -10,7 +10,7 @@ import { RealtimeClient, type FunctionCall } from "./realtime/client.js";
 import { dispatch } from "./tools/dispatcher.js";
 import { pingOpenclaw } from "./tools/openclaw.js";
 import { whatsapp } from "./tools/whatsapp.js";
-import { startDoorbellWatcher } from "./tools/blink.js";
+import { startDoorbellWatcher, cleanupDoorMedia } from "./tools/blink.js";
 import { sendTelegramMedia, berlinTime } from "./tools/telegram.js";
 import { speak } from "./audio/tts.js";
 import { rms } from "./audio/pcm.js";
@@ -205,6 +205,7 @@ if (config.blink.enabled) {
     if (config.blink.telegramTarget && media) {
       await sendTelegramMedia(config.blink.telegramTarget, `🔔 ${text}\n🕐 ${berlinTime()} (Berlin)`, media);
     }
+    await cleanupDoorMedia(); // delete the snapshot/clip — Telegram has the copy, nothing lingers locally
   });
 }
 
