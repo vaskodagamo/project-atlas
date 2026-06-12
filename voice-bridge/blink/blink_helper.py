@@ -146,12 +146,29 @@ async def cmd_cameras(session):
 
 
 async def cmd_snapshot(session, cam, path):
+    import urllib.parse
+
     blink = await connect(session)
     if cam not in blink.cameras:
         sys.exit(f"No camera named {cam!r}. Available: {list(blink.cameras.keys())}")
     camera = blink.cameras[cam]
+
+    def thumb_ts():
+        t = (camera.attributes or {}).get("thumbnail") or ""
+        return urllib.parse.parse_qs(urllib.parse.urlparse(t).query).get("ts", [""])[0] if "ts=" in t else ""
+
+    # Request a fresh capture, then wait until the thumbnail timestamp advances (the new image has
+    # uploaded) before saving — otherwise we'd grab the last real capture, which can be hours old.
+    before = thumb_ts()
     await camera.snap_picture()
-    await blink.refresh()
+    for _ in range(7):
+        await asyncio.sleep(2)
+        try:
+            await blink.refresh()
+        except Exception:  # noqa: BLE001
+            pass
+        if thumb_ts() != before:
+            break
     await camera.image_to_file(path)
     print(path)
 
